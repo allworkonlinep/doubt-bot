@@ -1,0 +1,52 @@
+import os,logging,base64
+import requests as req
+from telegram import Update
+from telegram.ext import ApplicationBuilder,CommandHandler,MessageHandler,filters,ContextTypes
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s",level=logging.INFO)
+logger=logging.getLogger(__name__)
+TELEGRAM_TOKEN=os.environ["TELEGRAM_TOKEN"]
+GROQ_API_KEY=os.environ["GROQ_API_KEY"]
+URL="https://api.groq.com/openai/v1/chat/completions"
+HDR={"Authorization":f"Bearer {GROQ_API_KEY}","Content-Type":"application/json"}
+SYS="Tu expert teacher hai. Subject batao, step-by-step Hinglish mein solve karo, tip do."
+def ask(msgs):
+    r=req.post(URL,headers=HDR,json={"model":"meta-llama/llama-4-scout-17b-16e-instruct","messages":msgs,"max_tokens":1500},timeout=60)
+    r.raise_for_status()
+    return r.json()["choices"][0]["message"]["content"]
+async def start(u,c):
+    await u.message.reply_text(
+"╔════════════════════╗\n"
+"║   🎓 DOUBT SOLVER BOT   ║\n"
+"╚════════════════════╝\n\n"
+"✨ Created & Designed by\n"
+"👑 S H I V A M  G U P T A 👑\n\n"
+"━━━━━━━━━━━━━━━━━━━━\n"
+"📸 Photo bhejo — question solve\n"
+"✍️ Text likho — answer milega\n"
+"━━━━━━━━━━━━━━━━━━━━\n\n"
+"📚 Math  |  Science  |  Hindi\n"
+"🚀 Sab kuch — bilkul free!")
+async def text(u,c):
+    await u.message.reply_text("🤔 Solve kar raha hoon...")
+    try:
+        ans=ask([{"role":"system","content":SYS},{"role":"user","content":u.message.text}])
+        await u.message.reply_text(ans)
+    except Exception as e:
+        await u.message.reply_text(f"❌ Error: {str(e)[:200]}")
+async def photo(u,c):
+    await u.message.reply_text("📸 Dekh raha hoon...")
+    try:
+        f=await c.bot.get_file(u.message.photo[-1].file_id)
+        b=await f.download_as_bytearray()
+        img=base64.standard_b64encode(b).decode()
+        cap=u.message.caption or "Solve karo"
+        ans=ask([{"role":"system","content":SYS},{"role":"user","content":[{"type":"text","text":cap},{"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{img}"}}]}])
+        await u.message.reply_text(ans)
+    except Exception as e:
+        await u.message.reply_text(f"❌ Error: {str(e)[:200]}")
+app=ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+app.add_handler(CommandHandler("start",start))
+app.add_handler(MessageHandler(filters.PHOTO,photo))
+app.add_handler(MessageHandler(filters.TEXT&~filters.COMMAND,text))
+logger.info("✅ Bot chal raha hai...")
+app.run_polling()
